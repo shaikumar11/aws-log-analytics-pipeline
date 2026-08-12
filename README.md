@@ -156,6 +156,128 @@ python view\_metrics.py        # reads the metrics back to confirm
 
 
 
+\## Example Output
+
+
+
+A real end-to-end run via `python run\_pipeline.py --skip-deploy --count 20`:
+
+
+
+```
+
+Generating 20 log events across 4 services...
+
+...
+
+Done. Uploaded 20 logs to s3://raw-logs/
+
+
+
+=== All processed summaries ===
+
+&#x20;    service\_name       date  total\_requests  error\_count  avg\_latency\_ms  p95\_latency\_ms
+
+&#x20;    auth-service 2026-08-12              14            1          203.39          489.39
+
+&#x20;checkout-service 2026-08-12              23            0           90.87          197.03
+
+inventory-service 2026-08-12              20            1          144.69          760.39
+
+&#x20;payments-service 2026-08-12              21            1          111.66          294.44
+
+
+
+=== Services ranked by error count ===
+
+&#x20;    service\_name       date  total\_requests  error\_count  error\_rate\_pct
+
+inventory-service 2026-08-12              20            1            5.00
+
+&#x20;    auth-service 2026-08-12              14            1            7.14
+
+&#x20;payments-service 2026-08-12              21            1            4.76
+
+&#x20;checkout-service 2026-08-12              23            0            0.00
+
+
+
+=== Services ranked by avg latency ===
+
+&#x20;    service\_name       date  avg\_latency\_ms  p95\_latency\_ms
+
+&#x20;    auth-service 2026-08-12          203.39          489.39
+
+inventory-service 2026-08-12          144.69          760.39
+
+&#x20;payments-service 2026-08-12          111.66          294.44
+
+&#x20;checkout-service 2026-08-12           90.87          197.03
+
+
+
+=== Total request volume across all services ===
+
+&#x20;total\_requests\_all\_services  total\_errors\_all\_services
+
+&#x20;                       78.0                        3.0
+
+```
+
+
+
+```
+
+STEP: Publish CloudWatch custom metrics
+
+Published metrics for auth-service: requests=14, errors=1, avg\_latency=203.39ms
+
+Published metrics for checkout-service: requests=23, errors=0, avg\_latency=90.87ms
+
+Published metrics for inventory-service: requests=20, errors=1, avg\_latency=144.69ms
+
+Published metrics for payments-service: requests=21, errors=1, avg\_latency=111.66ms
+
+
+
+STEP: View published metrics
+
+=== Metrics registered under LogPipeline/ServiceMetrics ===
+
+&#x20; AvgLatencyMs    \[ServiceName=auth-service]
+
+&#x20; ErrorCount      \[ServiceName=auth-service]
+
+&#x20; P95LatencyMs    \[ServiceName=auth-service]
+
+&#x20; RequestVolume   \[ServiceName=auth-service]
+
+&#x20; ... (same 4 metrics x 4 services)
+
+
+
+=== Sample: ErrorCount stats for auth-service (last hour) ===
+
+&#x20; Sum=2.0  Avg=1.0  Max=1.0  Time=2026-08-12 10:05:09+05:30
+
+
+
+Pipeline complete.
+
+```
+
+
+
+This confirms the full loop working: raw logs uploaded → S3 event automatically
+
+triggers the Lambda → Lambda aggregates and writes summaries → DuckDB queries
+
+those summaries with SQL → CloudWatch custom metrics are published and readable
+
+back, exactly as a production observability pipeline would behave.
+
+
+
 \## Files
 
 
