@@ -1,0 +1,17 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Debug output
+lambda_debug_output.txt
+test.zip
+
+# Environment / secrets
+.env
+
+# OS junk
+.DS_Store
+Thumbs.db
