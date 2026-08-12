@@ -1,14 +1,66 @@
-\# AWS Log Analytics Pipeline (LocalStack)
+\# AWS Log Analytics Pipeline
 
 
 
-A log analytics pipeline built with real AWS SDK (`boto3`) code and real
+!\[Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python\&logoColor=white)
 
-Lambda/S3 event-trigger patterns, running against \*\*LocalStack\*\* instead of
+!\[AWS](https://img.shields.io/badge/AWS-S3%20%7C%20Lambda%20%7C%20CloudWatch-orange?logo=amazonaws\&logoColor=white)
 
-live AWS. DuckDB queries the processed data directly from S3 with SQL,
+!\[LocalStack](https://img.shields.io/badge/LocalStack-Cloud%20Emulation-6C4CE0?logo=localstack\&logoColor=white)
 
-standing in for Athena.
+!\[DuckDB](https://img.shields.io/badge/DuckDB-SQL%20over%20S3-FFF000?logo=duckdb\&logoColor=black)
+
+!\[License](https://img.shields.io/badge/license-MIT-green)
+
+
+
+A log analytics pipeline built with \*\*real AWS SDK code\*\* (`boto3`) and real
+
+S3-event-triggered Lambda patterns, running against \*\*LocalStack\*\* as a
+
+local, cost-free stand-in for AWS. \*\*DuckDB\*\* queries the processed data
+
+directly from S3 with plain SQL, playing the role Athena would play in a
+
+live AWS deployment.
+
+
+
+> LocalStack simulates the AWS API surface — the code itself (`boto3` calls,
+
+> the Lambda handler, the S3 event trigger) is exactly what you'd write
+
+> against real AWS. Only the endpoint changes.
+
+
+
+\---
+
+
+
+\## Table of Contents
+
+
+
+\- \[Architecture](#architecture)
+
+\- \[Data Model](#data-model)
+
+\- \[Prerequisites](#prerequisites)
+
+\- \[Setup](#setup)
+
+\- \[Running the Pipeline](#running-the-pipeline)
+
+\- \[Example Output](#example-output)
+
+\- \[Project Files](#project-files)
+
+\- \[Notes \& Gotchas](#notes--gotchas)
+
+
+
+\---
 
 
 
@@ -18,43 +70,65 @@ standing in for Athena.
 
 ```
 
-generate\_logs.py                deploy\_lambda.py (one-time)
+&#x20;generate\_logs.py                          deploy\_lambda.py  (one-time setup)
 
-&#x20;       |                               |
+&#x20;       |                                          |
 
-&#x20;       v                               v
+&#x20;       v                                          v
 
-&#x20; raw-logs/{service}/{date}/{uuid}.json --(S3 event)--> Lambda (handler.py)
+&#x20;raw-logs/{service}/{date}/{uuid}.json --(S3 event)--> Lambda (handler.py)
 
-&#x20;                                                             |
+&#x20;                                                       |
 
-&#x20;                                                             v
+&#x20;                                                       v
 
-&#x20;                                           processed-logs/{service}/{date}/summary.json
+&#x20;                               processed-logs/{service}/{date}/summary.json
 
-&#x20;                                                             |
+&#x20;                                                       |
 
-&#x20;                             +-------------------------------+-------------------------------+
+&#x20;                       +---------------------------------+---------------------------------+
 
-&#x20;                             v                                                                 v
+&#x20;                       v                                                                     v
 
-&#x20;                   query\_duckdb.py (SQL over S3,                                  publish\_metrics.py
+&#x20;             query\_duckdb.py                                                  publish\_metrics.py
 
-&#x20;                    replaces Athena)                                          (CloudWatch custom metrics)
+&#x20;         (SQL over S3 - replaces Athena)                                (CloudWatch custom metrics)
 
 ```
 
 
 
-\*\*Data model\*\*
+\*\*Flow:\*\* logs are generated and uploaded to a `raw-logs` S3 bucket -> an S3
+
+event automatically triggers a Lambda function -> the Lambda aggregates all
+
+logs for that service/date and writes a summary to `processed-logs` -> DuckDB
+
+queries that summary data directly with SQL -> key metrics are published to
+
+CloudWatch as custom metrics.
 
 
 
-Raw log event: `timestamp`, `service\_name`, `level` (INFO/WARN/ERROR), `latency\_ms`, `message`
+\## Data Model
 
 
 
-Processed summary: `service\_name`, `date`, `total\_requests`, `error\_count`, `avg\_latency\_ms`, `p95\_latency\_ms`
+| Raw log event | Processed summary |
+
+|---|---|
+
+| `timestamp` | `service\_name` |
+
+| `service\_name` | `date` |
+
+| `level` (INFO / WARN / ERROR) | `total\_requests` |
+
+| `latency\_ms` | `error\_count` |
+
+| `message` | `avg\_latency\_ms` |
+
+| | `p95\_latency\_ms` |
 
 
 
@@ -66,9 +140,9 @@ Processed summary: `service\_name`, `date`, `total\_requests`, `error\_count`, `
 
 \- Python 3.11+
 
-\- A free LocalStack account + auth token (https://app.localstack.cloud -> Settings -> Auth Tokens).
+\- A free LocalStack account + auth token -- \[app.localstack.cloud](https://app.localstack.cloud) -> Settings -> Auth Tokens
 
-&#x20; LocalStack requires a token to start, even for community/non-commercial use.
+&#x20; (LocalStack requires a token to start, even for non-commercial/community use)
 
 
 
@@ -76,81 +150,103 @@ Processed summary: `service\_name`, `date`, `total\_requests`, `error\_count`, `
 
 
 
-1\. Create and activate a virtual environment:
-
-&#x20;  ```cmd
-
-&#x20;  python -m venv venv
-
-&#x20;  venv\\Scripts\\activate
-
-&#x20;  ```
+\*\*1. Create and activate a virtual environment\*\*
 
 
 
-2\. Install dependencies:
+```bash
 
-&#x20;  ```cmd
+python -m venv venv
 
-&#x20;  pip install -r requirements.txt
+venv\\Scripts\\activate
 
-&#x20;  ```
-
-
-
-3\. Start LocalStack with Docker-socket access (needed for Lambda) and persistence enabled:
-
-&#x20;  ```cmd
-
-&#x20;  docker run -d --name localstack -p 4566:4566 ^
-
-&#x20;    -e LOCALSTACK\_AUTH\_TOKEN=your\_token\_here ^
-
-&#x20;    -e PERSISTENCE=1 ^
-
-&#x20;    -v //var/run/docker.sock:/var/run/docker.sock ^
-
-&#x20;    -v localstack\_data:/var/lib/localstack ^
-
-&#x20;    localstack/localstack
-
-&#x20;  ```
+```
 
 
 
-4\. Verify it's healthy:
-
-&#x20;  ```cmd
-
-&#x20;  curl http://localhost:4566/\_localstack/health
-
-&#x20;  ```
-
-&#x20;  Look for `"s3"`, `"lambda"`, and `"cloudwatch"` as `"available"` or `"running"`.
+\*\*2. Install dependencies\*\*
 
 
 
-\## Running the pipeline
+```bash
+
+pip install -r requirements.txt
+
+```
 
 
 
-Run these in order (or use `run\_pipeline.py` to do it all at once):
+\*\*3. Start LocalStack\*\* (Docker-socket access is required for Lambda; persistence keeps state across restarts)
 
 
 
-```cmd
+```bash
 
-python setup\_buckets.py       # creates raw-logs and processed-logs buckets
+docker run -d --name localstack -p 4566:4566 ^
 
-python deploy\_lambda.py       # zips handler.py, deploys the Lambda, wires the S3 trigger
+&#x20; -e LOCALSTACK\_AUTH\_TOKEN=your\_token\_here ^
 
-python generate\_logs.py --count 40   # generates + uploads logs, which auto-triggers the Lambda
+&#x20; -e PERSISTENCE=1 ^
 
-python query\_duckdb.py        # SQL queries over the processed S3 data
+&#x20; -v //var/run/docker.sock:/var/run/docker.sock ^
 
-python publish\_metrics.py     # pushes CloudWatch custom metrics per service
+&#x20; -v localstack\_data:/var/lib/localstack ^
 
-python view\_metrics.py        # reads the metrics back to confirm
+&#x20; localstack/localstack
+
+```
+
+
+
+\*\*4. Verify it's healthy\*\*
+
+
+
+```bash
+
+curl http://localhost:4566/\_localstack/health
+
+```
+
+
+
+Look for `"s3"`, `"lambda"`, and `"cloudwatch"` as `"available"` or `"running"`.
+
+
+
+\## Running the Pipeline
+
+
+
+Run the steps individually, or use `run\_pipeline.py` to run them all at once.
+
+
+
+```bash
+
+python setup\_buckets.py              # create raw-logs / processed-logs buckets
+
+python deploy\_lambda.py              # deploy the Lambda + wire the S3 trigger
+
+python generate\_logs.py --count 40   # generate + upload logs (auto-triggers the Lambda)
+
+python query\_duckdb.py               # SQL queries over the processed S3 data
+
+python publish\_metrics.py            # push CloudWatch custom metrics
+
+python view\_metrics.py               # read the metrics back to confirm
+
+```
+
+
+
+Or, all at once:
+
+
+
+```bash
+
+python run\_pipeline.py --count 40
 
 ```
 
@@ -160,7 +256,9 @@ python view\_metrics.py        # reads the metrics back to confirm
 
 
 
-A real end-to-end run via `python run\_pipeline.py --skip-deploy --count 20`:
+<details>
+
+<summary><strong>Click to expand a full end-to-end run</strong></summary>
 
 
 
@@ -268,17 +366,23 @@ Pipeline complete.
 
 
 
-This confirms the full loop working: raw logs uploaded → S3 event automatically
-
-triggers the Lambda → Lambda aggregates and writes summaries → DuckDB queries
-
-those summaries with SQL → CloudWatch custom metrics are published and readable
-
-back, exactly as a production observability pipeline would behave.
+</details>
 
 
 
-\## Files
+This confirms the full loop working: raw logs uploaded -> S3 event
+
+automatically triggers the Lambda -> Lambda aggregates and writes summaries ->
+
+DuckDB queries those summaries with SQL -> CloudWatch custom metrics are
+
+published and readable back -- exactly how a production observability
+
+pipeline behaves.
+
+
+
+\## Project Files
 
 
 
@@ -290,7 +394,7 @@ back, exactly as a production observability pipeline would behave.
 
 | `generate\_logs.py` | Generates synthetic structured logs and uploads them to `raw-logs` |
 
-| `handler.py` | The Lambda function: aggregates raw logs into a summary per service/date |
+| `handler.py` | The Lambda function -- aggregates raw logs into a summary per service/date |
 
 | `deploy\_lambda.py` | Zips `handler.py`, creates/updates the Lambda, wires the S3 event trigger |
 
@@ -302,23 +406,35 @@ back, exactly as a production observability pipeline would behave.
 
 | `run\_pipeline.py` | Runs the whole pipeline end-to-end in one command |
 
-| Debug helpers | `check\_function\_info.py`, `dump\_lambda\_log.py`, `inspect\_zip.py` -- for troubleshooting Lambda deploys |
+| `check\_function\_info.py`, `dump\_lambda\_log.py`, `inspect\_zip.py` | Debug helpers used while troubleshooting Lambda deploys |
 
 
 
-\## Notes / gotchas
+\## Notes \& Gotchas
 
 
 
-\- LocalStack Lambda containers can't reach `localhost:4566` internally -- `handler.py` builds
+\- LocalStack Lambda containers can't reach `localhost:4566` internally --
 
-&#x20; the S3 endpoint from `LOCALSTACK\_HOSTNAME`/`EDGE\_PORT`, which LocalStack injects automatically.
+&#x20; `handler.py` builds the S3 endpoint from `LOCALSTACK\_HOSTNAME` / `EDGE\_PORT`,
 
-\- The Lambda re-aggregates \*\*all\*\* raw logs for a given `service\_name/date` on every invocation
+&#x20; which LocalStack injects automatically into the Lambda's environment.
 
-&#x20; (not just the file that triggered it), so `processed-logs` summaries are always fully up to date.
+\- The Lambda re-aggregates \*\*all\*\* raw logs for a given `service\_name/date`
 
-\- Without `PERSISTENCE=1` and a named volume, all LocalStack state (buckets, functions, triggers)
+&#x20; on every invocation (not just the file that triggered it), so
 
-&#x20; is wiped every time the container restarts.
+&#x20; `processed-logs` summaries are always fully up to date.
+
+\- Without `PERSISTENCE=1` and a named volume, all LocalStack state (buckets,
+
+&#x20; functions, triggers) is wiped every time the container restarts.
+
+
+
+\---
+
+
+
+<p align="center">Built as a portfolio project demonstrating real AWS SDK patterns -- S3 event triggers, Lambda, and SQL-over-data-lake analytics -- without AWS billing.</p>
 
